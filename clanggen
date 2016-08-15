@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+from argparse import ArgumentParser
+from os import path
+from core.clanggen import programs
+from collections import namedtuple
+import re
+
+if __name__ != "__main__":
+  exit(-1) # should be treated as a program
+
+parser = ArgumentParser(description="Set of tools to generate c files.")
+parser.add_argument \
+  ("program", metavar="program", type=str,
+   choices=map(lambda p:p.name, programs),
+   help="The program to run ({})".\
+            format(", ".join(map(lambda p:p.name, programs))))
+parser.add_argument \
+  ("-o", "--output", dest="output", type=str, required=True,
+   help="Output destination, Maybe suffixed with .c and .h")
+parser.add_argument \
+  ("-n", "--outputname", dest="outputname", type=str, default="",
+   help="Name of output, Default output name is basename of output")
+parser.add_argument \
+  ("--codeonly", dest="codeonly", action='store_const', const=True,
+   help="Output only core code, No header file")
+parser.add_argument \
+  ("inputs", metavar="input", nargs="+",
+   help="Input files, format: [<name>@]<path>")
+
+args = parser.parse_args()
+
+try:
+  program = None
+  for p in filter(lambda p: p.name == args.program, programs):
+    program = p
+    break
+  assert program != None, "Unkown program!"
+  pargs = {}
+  if args.outputname == "":
+    pargs["outputname"] = path.basename(args.output)
+    pargs["outputdir"] = path.dirname(args.output)
+    assert pargs["outputname"] != "", "No output name!"
+  else:
+    pargs["outputdir"] = args.output
+    pargs["outputname"] = args.outputname
+  
+  InputType = namedtuple("InputType", ["name", "path"])
+  inppattern1 = re.compile(r"([^@]+)@(.*)")
+  inputs = []
+  for inp in args.inputs:
+    if "@" in inp:
+      match = inppattern.match(inp)
+      assert match != None, "Invalid input: {}".format(inp)
+      inpname = match.group(1)
+      inppath = match.group(2)
+    else:
+      inpname = path.basename(inp)
+      inppath = inp
+      assert inpname != "", "Could not parse input name: {}".format(inp)
+    inputs.append(InputType(inpname, inppath))
+  pargs["inputs"] = inputs
+  pargs["codeonly"] = args.codeonly
+  program.exec(**pargs)
+except AssertionError as err:
+  print("ERR: {}".format(str(err)))
