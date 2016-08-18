@@ -1,7 +1,9 @@
-# Generate c files
+# File to variable
 
-clanggen is made with python3. It has no dependency other than python 3.2
+file2var is made with python3. It has no dependency other than python 3.2
 or higher.
+
+## For example
 
 Generate c files, Convert text files to cstring or binary files to c
 `unsigned char[]`.

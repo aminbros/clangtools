@@ -2,9 +2,11 @@
 
 from argparse import ArgumentParser
 from os import path
-from core.clanggen import programs
-from collections import namedtuple
+from libfile2var import programs, InputType, Options, execute_program
+import libfile2var.presets
 import re
+from importlib import import_module
+from collections import namedtuple
 
 if __name__ != "__main__":
   exit(-1) # should be treated as a program
@@ -22,11 +24,34 @@ parser.add_argument \
   ("-n", "--outputname", dest="outputname", type=str, default="",
    help="Name of output, Default output name is basename of output")
 parser.add_argument \
-  ("--codeonly", dest="codeonly", action='store_const', const=True,
-   help="Output only core code, No header file")
-parser.add_argument \
   ("inputs", metavar="input", nargs="+",
    help="Input files, format: [<name>@]<path>")
+parser.add_argument \
+  ("-p", "--preset", dest="preset", type=str, default="c",
+   help="Presets are in core/file2var/presets/")
+
+optionsg = parser.add_argument_group("options")
+optionsg.add_argument \
+  ("--noheader", dest="noheader", action='store_const', const=True,
+   help="Output only core code, No header file")
+parser.add_argument \
+  ("--pretty", dest="pretty", action='store_const', const=True,
+   help="Pretty output")
+parser.add_argument \
+  ("--declare", dest="declare", type=str,
+   help="Declaration statement")
+parser.add_argument \
+  ("--defprefix", dest="defprefix", type=str,
+   help="Definition prefix statement")
+parser.add_argument \
+  ("--op-eq", dest="op_eq", type=str,
+   help="Equal operator")
+parser.add_argument \
+  ("--op-concat", dest="op_concat", type=str,
+   help="Concat operator")
+parser.add_argument \
+  ("--endstatement", dest="endstatement", type=str,
+   help="End statement")
 
 args = parser.parse_args()
 
@@ -36,16 +61,17 @@ try:
     program = p
     break
   assert program != None, "Unkown program!"
-  pargs = {}
+  pargs = {"program": program}
   if args.outputname == "":
     pargs["outputname"] = path.basename(args.output)
     pargs["outputdir"] = path.dirname(args.output)
+    if pargs["outputdir"] == "":
+      pargs["outputdir"] = "." # relative to current directory
     assert pargs["outputname"] != "", "No output name!"
   else:
     pargs["outputdir"] = args.output
     pargs["outputname"] = args.outputname
   
-  InputType = namedtuple("InputType", ["name", "path"])
   inppattern1 = re.compile(r"([^@]+)@(.*)")
   inputs = []
   for inp in args.inputs:
@@ -60,7 +86,20 @@ try:
       assert inpname != "", "Could not parse input name: {}".format(inp)
     inputs.append(InputType(inpname, inppath))
   pargs["inputs"] = inputs
-  pargs["codeonly"] = args.codeonly
-  program.exec(**pargs)
+  # load options
+  options_get = ["declare", "defprefix", "pretty", "noheader", "op_eq",
+                 "op_concat", "endstatement"]
+  try:
+    preset = import_module("." + args.preset, "libfile2var.presets")
+    optionsdict = getattr(preset, program.name)
+  except ImportError:
+    raise AssertionError("Could not import " + args.preset)
+  except AttributeError:
+    raise AssertionError("Preset does not support the program")
+  options = Options()
+  for k,v in optionsdict.items():
+    setattr(options, k, v)
+  pargs["options"] = options
+  execute_program(**pargs)
 except AssertionError as err:
   print("ERR: {}".format(str(err)))
